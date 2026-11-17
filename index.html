@@ -6,6 +6,9 @@
     <title>Hexa Glow: Merge & Sort</title>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <style>
+        :root {
+            --tg-top-inset: 0px;
+        }
         html, body {
             margin: 0;
             padding: 0;
@@ -22,8 +25,12 @@
             -webkit-touch-callout: none !important;
         }
         #canvas {
+            position: fixed;
+            left: 0;
+            right: 0;
+            top: var(--tg-top-inset);
             width: 100%;
-            height: 100%;
+            height: calc(100% - var(--tg-top-inset));
             display: block;
             outline: none;
             touch-action: none !important;
@@ -59,6 +66,18 @@
             padding: 24px;
             z-index: 10000;
         }
+        #rotate-btn {
+            margin-top: 24px;
+            padding: 16px 32px;
+            font-size: 18px;
+            font-weight: bold;
+            color: #05020d;
+            background: linear-gradient(90deg, #00f0ff, #00f59b);
+            border: none;
+            border-radius: 16px;
+            box-shadow: 0 0 20px rgba(0, 240, 255, 0.5);
+            cursor: pointer;
+        }
         @media screen and (orientation: portrait) {
             #rotate-overlay {
                 display: flex;
@@ -76,11 +95,32 @@
             RSYA_WEB_INT_ID: "R-M-20441823-1"
         };
 
+        function updateTelegramSafeInsets() {
+            var topInset = 0;
+            if (window.Telegram && window.Telegram.WebApp) {
+                var tg = window.Telegram.WebApp;
+                // Берём системный отступ сверху из Telegram API (safeAreaInset + contentSafeAreaInset)
+                var sysTop = (tg.safeAreaInset && tg.safeAreaInset.top) ? tg.safeAreaInset.top : 0;
+                var contentTop = (tg.contentSafeAreaInset && tg.contentSafeAreaInset.top) ? tg.contentSafeAreaInset.top : 0;
+                topInset = sysTop + contentTop;
+
+                // Если в полноэкранном режиме Telegram API вернул 0 или меньше 74px — ставим гарантированный отступ под статус-бар и кнопку "Закрыть"
+                if (tg.isFullscreen && topInset < 76) {
+                    topInset = 76;
+                }
+            }
+            document.documentElement.style.setProperty('--tg-top-inset', topInset + 'px');
+        }
+
         function forceLandscapeAndFullscreen() {
             if (window.Telegram && window.Telegram.WebApp) {
                 var tg = window.Telegram.WebApp;
                 try { tg.ready(); } catch(e) {}
                 try { tg.expand(); } catch(e) {}
+                try {
+                    if (typeof tg.setHeaderColor === "function") tg.setHeaderColor("#05020d");
+                    if (typeof tg.setBackgroundColor === "function") tg.setBackgroundColor("#05020d");
+                } catch(e) {}
                 try {
                     if (typeof tg.disableVerticalSwipes === "function") {
                         tg.disableVerticalSwipes();
@@ -91,7 +131,6 @@
                         tg.requestFullscreen();
                     }
                 } catch(e) {}
-                // Блокируем ориентацию в Telegram ТОЛЬКО когда окно уже в альбомном формате
                 try {
                     if (window.innerWidth > window.innerHeight && typeof tg.lockOrientation === "function") {
                         tg.lockOrientation();
@@ -99,19 +138,27 @@
                 } catch(e) {}
             }
 
-            // Принудительно запрашиваем горизонтальный режим через Web Screen Orientation API
             try {
                 if (screen.orientation && typeof screen.orientation.lock === "function") {
                     screen.orientation.lock("landscape").catch(function(){});
                 }
             } catch(e) {}
+
+            updateTelegramSafeInsets();
         }
 
         forceLandscapeAndFullscreen();
+        if (window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.onEvent) {
+            window.Telegram.WebApp.onEvent("fullscreenChanged", updateTelegramSafeInsets);
+            window.Telegram.WebApp.onEvent("safeAreaChanged", updateTelegramSafeInsets);
+            window.Telegram.WebApp.onEvent("contentSafeAreaChanged", updateTelegramSafeInsets);
+        }
         window.addEventListener("orientationchange", function() {
             setTimeout(forceLandscapeAndFullscreen, 150);
         });
-        window.addEventListener("resize", forceLandscapeAndFullscreen);
+        window.addEventListener("resize", function() {
+            forceLandscapeAndFullscreen();
+        });
 
         window.GamePlatform = {
             current: "unknown",
@@ -237,14 +284,15 @@
         <div style="font-size: 48px; margin-bottom: 16px;">📱 ↻</div>
         <div>ПОВЕРНИТЕ ТЕЛЕФОН ГОРИЗОНТАЛЬНО</div>
         <div style="font-size: 16px; color: #a8f9ff; margin-top: 8px; font-weight: normal;">Для полноэкранной игры в альбомном режиме</div>
+        <button id="rotate-btn" onclick="forceLandscapeAndFullscreen()">ПОВЕРНУТЬ ЭКРАН</button>
     </div>
     <div id="boot-loader">HEXA GLOW: ЗАГРУЗКА...</div>
     <canvas id="canvas"></canvas>
     <script src="index.js"></script>
     <script>
-        document.addEventListener('touchstart', function() {
+        document.addEventListener('touchend', function() {
             forceLandscapeAndFullscreen();
-        }, { passive: true, once: true });
+        }, { passive: true });
 
         document.addEventListener('touchmove', function(e) {
             e.preventDefault();
