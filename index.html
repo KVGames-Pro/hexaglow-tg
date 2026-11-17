@@ -43,6 +43,27 @@
             z-index: 9999;
             transition: opacity 0.35s ease;
         }
+        #rotate-overlay {
+            position: fixed;
+            inset: 0;
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            background: radial-gradient(circle at center, #140a33 0%, #05020d 100%);
+            color: #00f0ff;
+            font-family: sans-serif;
+            font-size: 22px;
+            font-weight: bold;
+            text-align: center;
+            padding: 24px;
+            z-index: 10000;
+        }
+        @media screen and (orientation: portrait) {
+            #rotate-overlay {
+                display: flex;
+            }
+        }
     </style>
     <link id="-gd-engine-icon" rel="icon" type="image/png" href="index.icon.png" />
 <link rel="apple-touch-icon" href="index.apple-touch-icon.png"/>
@@ -55,7 +76,7 @@
             RSYA_WEB_INT_ID: "R-M-20441823-1"
         };
 
-        function lockTelegramViewport() {
+        function forceLandscapeAndFullscreen() {
             if (window.Telegram && window.Telegram.WebApp) {
                 var tg = window.Telegram.WebApp;
                 try { tg.ready(); } catch(e) {}
@@ -70,15 +91,27 @@
                         tg.requestFullscreen();
                     }
                 } catch(e) {}
+                // Блокируем ориентацию в Telegram ТОЛЬКО когда окно уже в альбомном формате
                 try {
-                    if (typeof tg.lockOrientation === "function") {
+                    if (window.innerWidth > window.innerHeight && typeof tg.lockOrientation === "function") {
                         tg.lockOrientation();
                     }
                 } catch(e) {}
             }
+
+            // Принудительно запрашиваем горизонтальный режим через Web Screen Orientation API
+            try {
+                if (screen.orientation && typeof screen.orientation.lock === "function") {
+                    screen.orientation.lock("landscape").catch(function(){});
+                }
+            } catch(e) {}
         }
 
-        lockTelegramViewport();
+        forceLandscapeAndFullscreen();
+        window.addEventListener("orientationchange", function() {
+            setTimeout(forceLandscapeAndFullscreen, 150);
+        });
+        window.addEventListener("resize", forceLandscapeAndFullscreen);
 
         window.GamePlatform = {
             current: "unknown",
@@ -134,7 +167,7 @@
                     document.head.appendChild(s);
                 } else if (isTG) {
                     this.current = "telegram";
-                    lockTelegramViewport();
+                    forceLandscapeAndFullscreen();
                     var s2 = document.createElement('script');
                     s2.src = "https://sad.adsgram.ai/js/sad.min.js";
                     document.head.appendChild(s2);
@@ -200,12 +233,17 @@
     </script>
 </head>
 <body>
+    <div id="rotate-overlay">
+        <div style="font-size: 48px; margin-bottom: 16px;">📱 ↻</div>
+        <div>ПОВЕРНИТЕ ТЕЛЕФОН ГОРИЗОНТАЛЬНО</div>
+        <div style="font-size: 16px; color: #a8f9ff; margin-top: 8px; font-weight: normal;">Для полноэкранной игры в альбомном режиме</div>
+    </div>
     <div id="boot-loader">HEXA GLOW: ЗАГРУЗКА...</div>
     <canvas id="canvas"></canvas>
     <script src="index.js"></script>
     <script>
         document.addEventListener('touchstart', function() {
-            lockTelegramViewport();
+            forceLandscapeAndFullscreen();
         }, { passive: true, once: true });
 
         document.addEventListener('touchmove', function(e) {
@@ -224,7 +262,7 @@
             delete window.WebAssembly.instantiateStreaming;
             const engine = new Engine(config);
             engine.startGame().then(function() {
-                lockTelegramViewport();
+                forceLandscapeAndFullscreen();
                 var loader = document.getElementById('boot-loader');
                 if (loader) {
                     loader.style.opacity = '0';
