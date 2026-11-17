@@ -4,12 +4,15 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, user-scalable=no, initial-scale=1.0, maximum-scale=1.0, viewport-fit=cover">
     <title>Hexa Glow: Merge & Sort</title>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <style>
         html, body {
             margin: 0;
             padding: 0;
             width: 100%;
             height: 100%;
+            position: fixed;
+            inset: 0;
             background-color: #05020d;
             overflow: hidden;
             touch-action: none !important;
@@ -45,13 +48,37 @@
 <link rel="apple-touch-icon" href="index.apple-touch-icon.png"/>
 
     <script>
-        // ВПИШИ СЮДА СВОИ БОЕВЫЕ ID БЛОКОВ ADSGRAM И РСЯ (WEB)
         var AD_CONFIG = {
-            ADSGRAM_REWARD_ID: "reward-55151",      // Замени на Rewarded ID из Adsgram для Hexa Glow
-            ADSGRAM_INTERSTITIAL_ID: "int-55151",   // Замени на Interstitial ID из Adsgram для Hexa Glow
-            RSYA_WEB_REWARD_ID: "R-A-XXXXXX-2",     // Rewarded ID из РСЯ (Реклама на сайтах)
-            RSYA_WEB_INT_ID: "R-A-XXXXXX-1"         // Fullscreen ID из РСЯ (Реклама на сайтах)
+            ADSGRAM_REWARD_ID: "60321",
+            ADSGRAM_INTERSTITIAL_ID: "int-60322",
+            RSYA_WEB_REWARD_ID: "R-M-20441823-2",
+            RSYA_WEB_INT_ID: "R-M-20441823-1"
         };
+
+        function lockTelegramViewport() {
+            if (window.Telegram && window.Telegram.WebApp) {
+                var tg = window.Telegram.WebApp;
+                try { tg.ready(); } catch(e) {}
+                try { tg.expand(); } catch(e) {}
+                try {
+                    if (typeof tg.disableVerticalSwipes === "function") {
+                        tg.disableVerticalSwipes();
+                    }
+                } catch(e) {}
+                try {
+                    if (typeof tg.requestFullscreen === "function" && !tg.isFullscreen) {
+                        tg.requestFullscreen();
+                    }
+                } catch(e) {}
+                try {
+                    if (typeof tg.lockOrientation === "function") {
+                        tg.lockOrientation();
+                    }
+                } catch(e) {}
+            }
+        }
+
+        lockTelegramViewport();
 
         window.GamePlatform = {
             current: "unknown",
@@ -65,7 +92,7 @@
                 var isVK = (fullUrl.indexOf("vk_app_id=") !== -1 || fullUrl.indexOf("viewer_id=") !== -1 || fullUrl.indexOf("api_id=") !== -1) && !isVKPlay;
                 var isOK = fullUrl.indexOf("application_key=") !== -1 || fullUrl.indexOf("logged_in=") !== -1 || referrer.indexOf("ok.ru") !== -1;
                 var isYandex = referrer.indexOf("yandex.ru") !== -1 || referrer.indexOf("yandex.com") !== -1 || fullUrl.indexOf("ysdk") !== -1;
-                var isTG = fullUrl.indexOf("tgWebApp") !== -1 || referrer.indexOf("t.me") !== -1 || (window.Telegram && window.Telegram.WebApp);
+                var isTG = fullUrl.indexOf("tgWebApp") !== -1 || referrer.indexOf("t.me") !== -1 || (window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.initData !== "");
 
                 if (isVKPlay) {
                     this.current = "vk_play";
@@ -107,24 +134,11 @@
                     document.head.appendChild(s);
                 } else if (isTG) {
                     this.current = "telegram";
-                    var s1 = document.createElement('script');
-                    s1.src = "https://telegram.org/js/telegram-web-app.js";
-                    s1.onload = function() {
-                        if (window.Telegram && window.Telegram.WebApp) {
-                            window.Telegram.WebApp.ready();
-                            window.Telegram.WebApp.expand();
-                            if (window.Telegram.WebApp.disableVerticalSwipes) {
-                                window.Telegram.WebApp.disableVerticalSwipes();
-                            }
-                        }
-                    };
-                    document.head.appendChild(s1);
-
+                    lockTelegramViewport();
                     var s2 = document.createElement('script');
                     s2.src = "https://sad.adsgram.ai/js/sad.min.js";
                     document.head.appendChild(s2);
                 } else {
-                    // Обычный браузер / собственный сайт — подключаем РСЯ Web
                     this.current = "web";
                     this.loadYandexContext();
                 }
@@ -139,7 +153,6 @@
         };
         window.GamePlatform.init();
 
-        // Показ Rewarded-рекламы в Telegram (Adsgram)
         function showTgAd(onSuccess, onError) {
             if (typeof window.Adsgram !== 'undefined') {
                 window.Adsgram.init({ blockId: AD_CONFIG.ADSGRAM_REWARD_ID }).show()
@@ -150,7 +163,6 @@
             }
         }
 
-        // Показ Interstitial-рекламы в Telegram (Adsgram)
         function showTgInterstitial(onClosed) {
             if (typeof window.Adsgram !== 'undefined' && AD_CONFIG.ADSGRAM_INTERSTITIAL_ID) {
                 window.Adsgram.init({ blockId: AD_CONFIG.ADSGRAM_INTERSTITIAL_ID }).show()
@@ -161,7 +173,6 @@
             }
         }
 
-        // Показ рекламы РСЯ (Web / VK Play)
         function showRsyaWebAd(isRewarded, onSuccess, onError) {
             var blockId = isRewarded ? AD_CONFIG.RSYA_WEB_REWARD_ID : AD_CONFIG.RSYA_WEB_INT_ID;
             if (window.Ya && window.Ya.Context && window.Ya.Context.AdvManager && blockId.indexOf("XXXXXX") === -1) {
@@ -193,26 +204,27 @@
     <canvas id="canvas"></canvas>
     <script src="index.js"></script>
     <script>
-        // Блокируем браузерные жесты прокрутки/сворачивания на канвасе
+        document.addEventListener('touchstart', function() {
+            lockTelegramViewport();
+        }, { passive: true, once: true });
+
         document.addEventListener('touchmove', function(e) {
-            if (e.target && e.target.id === 'canvas') {
-                e.preventDefault();
-            }
+            e.preventDefault();
         }, { passive: false });
 
-        // Не даём экрану телефона погаснуть во время игры
         if ('wakeLock' in navigator) {
             navigator.wakeLock.request('screen').catch(function(){});
         }
 
         try {
-            var config = {"args":[],"canvasResizePolicy":2,"emscriptenPoolSize":8,"ensureCrossOriginIsolationHeaders":true,"executable":"index","experimentalVK":false,"fileSizes":{"index.pck":34220160,"index.wasm":39514754},"focusCanvas":true,"gdextensionLibs":[],"godotPoolSize":4};
+            var config = {"args":[],"canvasResizePolicy":2,"emscriptenPoolSize":8,"ensureCrossOriginIsolationHeaders":true,"executable":"index","experimentalVK":false,"fileSizes":{"index.pck":34220544,"index.wasm":39514754},"focusCanvas":true,"gdextensionLibs":[],"godotPoolSize":4};
             config.ensureCrossOriginIsolationHeaders = false;
             config.emscriptenPoolSize = 0;
             config.godotPoolSize = 0;
             delete window.WebAssembly.instantiateStreaming;
             const engine = new Engine(config);
             engine.startGame().then(function() {
+                lockTelegramViewport();
                 var loader = document.getElementById('boot-loader');
                 if (loader) {
                     loader.style.opacity = '0';
