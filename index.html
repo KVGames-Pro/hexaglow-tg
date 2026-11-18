@@ -6,9 +6,6 @@
     <title>Hexa Glow: Merge & Sort</title>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <style>
-        :root {
-            --tg-top-inset: 0px;
-        }
         html, body {
             margin: 0;
             padding: 0;
@@ -26,11 +23,9 @@
         }
         #canvas {
             position: fixed;
-            left: 0;
-            right: 0;
-            top: var(--tg-top-inset);
+            inset: 0;
             width: 100%;
-            height: calc(100% - var(--tg-top-inset));
+            height: 100%;
             display: block;
             outline: none;
             touch-action: none !important;
@@ -95,28 +90,17 @@
             RSYA_WEB_INT_ID: "R-M-20441823-1"
         };
 
-        function updateTelegramSafeInsets() {
-            var topInset = 0;
-            if (window.Telegram && window.Telegram.WebApp) {
-                var tg = window.Telegram.WebApp;
-                // Берём системный отступ сверху из Telegram API (safeAreaInset + contentSafeAreaInset)
-                var sysTop = (tg.safeAreaInset && tg.safeAreaInset.top) ? tg.safeAreaInset.top : 0;
-                var contentTop = (tg.contentSafeAreaInset && tg.contentSafeAreaInset.top) ? tg.contentSafeAreaInset.top : 0;
-                topInset = sysTop + contentTop;
+        var _tgFullscreenRequested = false;
+        var _tgOrientationLocked = false;
+        var _resizeTimer = null;
 
-                // Если в полноэкранном режиме Telegram API вернул 0 или меньше 74px — ставим гарантированный отступ под статус-бар и кнопку "Закрыть"
-                if (tg.isFullscreen && topInset < 76) {
-                    topInset = 76;
-                }
-            }
-            document.documentElement.style.setProperty('--tg-top-inset', topInset + 'px');
-        }
-
-        function forceLandscapeAndFullscreen() {
+        function applyTelegramViewport(isUserGesture) {
             if (window.Telegram && window.Telegram.WebApp) {
                 var tg = window.Telegram.WebApp;
                 try { tg.ready(); } catch(e) {}
-                try { tg.expand(); } catch(e) {}
+                try {
+                    if (!tg.isExpanded) tg.expand();
+                } catch(e) {}
                 try {
                     if (typeof tg.setHeaderColor === "function") tg.setHeaderColor("#05020d");
                     if (typeof tg.setBackgroundColor === "function") tg.setBackgroundColor("#05020d");
@@ -126,38 +110,44 @@
                         tg.disableVerticalSwipes();
                     }
                 } catch(e) {}
+
+                if ((isUserGesture || !_tgFullscreenRequested) && typeof tg.requestFullscreen === "function" && !tg.isFullscreen) {
+                    _tgFullscreenRequested = true;
+                    try { tg.requestFullscreen(); } catch(e) {}
+                }
+
+                if (!_tgOrientationLocked && window.innerWidth > window.innerHeight && typeof tg.lockOrientation === "function") {
+                    _tgOrientationLocked = true;
+                    try { tg.lockOrientation(); } catch(e) {}
+                }
+            }
+
+            if (isUserGesture) {
                 try {
-                    if (typeof tg.requestFullscreen === "function" && !tg.isFullscreen) {
-                        tg.requestFullscreen();
-                    }
-                } catch(e) {}
-                try {
-                    if (window.innerWidth > window.innerHeight && typeof tg.lockOrientation === "function") {
-                        tg.lockOrientation();
+                    if (screen.orientation && typeof screen.orientation.lock === "function") {
+                        screen.orientation.lock("landscape").catch(function(){});
                     }
                 } catch(e) {}
             }
-
-            try {
-                if (screen.orientation && typeof screen.orientation.lock === "function") {
-                    screen.orientation.lock("landscape").catch(function(){});
-                }
-            } catch(e) {}
-
-            updateTelegramSafeInsets();
         }
 
-        forceLandscapeAndFullscreen();
-        if (window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.onEvent) {
-            window.Telegram.WebApp.onEvent("fullscreenChanged", updateTelegramSafeInsets);
-            window.Telegram.WebApp.onEvent("safeAreaChanged", updateTelegramSafeInsets);
-            window.Telegram.WebApp.onEvent("contentSafeAreaChanged", updateTelegramSafeInsets);
-        }
+        applyTelegramViewport(false);
+
         window.addEventListener("orientationchange", function() {
-            setTimeout(forceLandscapeAndFullscreen, 150);
+            _tgOrientationLocked = false;
+            clearTimeout(_resizeTimer);
+            _resizeTimer = setTimeout(function() {
+                applyTelegramViewport(false);
+            }, 250);
         });
+
         window.addEventListener("resize", function() {
-            forceLandscapeAndFullscreen();
+            clearTimeout(_resizeTimer);
+            _resizeTimer = setTimeout(function() {
+                if (!_tgOrientationLocked && window.innerWidth > window.innerHeight) {
+                    applyTelegramViewport(false);
+                }
+            }, 300);
         });
 
         window.GamePlatform = {
@@ -214,7 +204,7 @@
                     document.head.appendChild(s);
                 } else if (isTG) {
                     this.current = "telegram";
-                    forceLandscapeAndFullscreen();
+                    applyTelegramViewport(false);
                     var s2 = document.createElement('script');
                     s2.src = "https://sad.adsgram.ai/js/sad.min.js";
                     document.head.appendChild(s2);
@@ -233,21 +223,27 @@
         };
         window.GamePlatform.init();
 
+        var _adInProgress = false;
+
         function showTgAd(onSuccess, onError) {
+            if (_adInProgress) return;
             if (typeof window.Adsgram !== 'undefined') {
+                _adInProgress = true;
                 window.Adsgram.init({ blockId: AD_CONFIG.ADSGRAM_REWARD_ID }).show()
-                    .then(function() { if (onSuccess) onSuccess(); })
-                    .catch(function() { if (onError) onError(); });
+                    .then(function() { _adInProgress = false; if (onSuccess) onSuccess(); })
+                    .catch(function() { _adInProgress = false; if (onError) onError(); });
             } else {
                 if (onError) onError();
             }
         }
 
         function showTgInterstitial(onClosed) {
+            if (_adInProgress) { if (onClosed) onClosed(); return; }
             if (typeof window.Adsgram !== 'undefined' && AD_CONFIG.ADSGRAM_INTERSTITIAL_ID) {
+                _adInProgress = true;
                 window.Adsgram.init({ blockId: AD_CONFIG.ADSGRAM_INTERSTITIAL_ID }).show()
-                    .then(function() { if (onClosed) onClosed(); })
-                    .catch(function() { if (onClosed) onClosed(); });
+                    .then(function() { _adInProgress = false; if (onClosed) onClosed(); })
+                    .catch(function() { _adInProgress = false; if (onClosed) onClosed(); });
             } else {
                 if (onClosed) onClosed();
             }
@@ -284,14 +280,16 @@
         <div style="font-size: 48px; margin-bottom: 16px;">📱 ↻</div>
         <div>ПОВЕРНИТЕ ТЕЛЕФОН ГОРИЗОНТАЛЬНО</div>
         <div style="font-size: 16px; color: #a8f9ff; margin-top: 8px; font-weight: normal;">Для полноэкранной игры в альбомном режиме</div>
-        <button id="rotate-btn" onclick="forceLandscapeAndFullscreen()">ПОВЕРНУТЬ ЭКРАН</button>
+        <button id="rotate-btn" onclick="applyTelegramViewport(true)">ПОВЕРНУТЬ ЭКРАН</button>
     </div>
     <div id="boot-loader">HEXA GLOW: ЗАГРУЗКА...</div>
     <canvas id="canvas"></canvas>
     <script src="index.js"></script>
     <script>
         document.addEventListener('touchend', function() {
-            forceLandscapeAndFullscreen();
+            if (!_tgOrientationLocked || !(window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.isFullscreen)) {
+                applyTelegramViewport(true);
+            }
         }, { passive: true });
 
         document.addEventListener('touchmove', function(e) {
@@ -303,14 +301,14 @@
         }
 
         try {
-            var config = {"args":[],"canvasResizePolicy":2,"emscriptenPoolSize":8,"ensureCrossOriginIsolationHeaders":true,"executable":"index","experimentalVK":false,"fileSizes":{"index.pck":34225984,"index.wasm":39514754},"focusCanvas":true,"gdextensionLibs":[],"godotPoolSize":4};
+            var config = {"args":[],"canvasResizePolicy":2,"emscriptenPoolSize":8,"ensureCrossOriginIsolationHeaders":true,"executable":"index","experimentalVK":false,"fileSizes":{"index.pck":34227168,"index.wasm":39514754},"focusCanvas":true,"gdextensionLibs":[],"godotPoolSize":4};
             config.ensureCrossOriginIsolationHeaders = false;
             config.emscriptenPoolSize = 0;
             config.godotPoolSize = 0;
             delete window.WebAssembly.instantiateStreaming;
             const engine = new Engine(config);
             engine.startGame().then(function() {
-                forceLandscapeAndFullscreen();
+                applyTelegramViewport(false);
                 var loader = document.getElementById('boot-loader');
                 if (loader) {
                     loader.style.opacity = '0';
