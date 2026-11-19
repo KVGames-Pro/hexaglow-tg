@@ -45,32 +45,42 @@
             z-index: 9999;
             transition: opacity 0.35s ease;
         }
+        /* Кнопка полноэкранного режима в свободной левой зоне под верхней панелью (не перекрывает ПАУЗУ, МИРЫ и СОЗДАТЬ) */
         #fs-toggle-btn {
             position: fixed;
-            top: 10px;
-            right: 10px;
-            width: 38px;
-            height: 38px;
-            border-radius: 10px;
-            border: 1.5px solid rgba(0, 240, 255, 0.65);
-            background: rgba(12, 6, 32, 0.72);
+            top: 84px;
+            left: 14px;
+            width: 40px;
+            height: 40px;
+            border-radius: 11px;
+            border: 1.5px solid rgba(0, 240, 255, 0.7);
+            background: rgba(10, 5, 28, 0.78);
             color: #00f0ff;
-            font-size: 18px;
+            font-size: 19px;
             line-height: 1;
             display: none;
             align-items: center;
             justify-content: center;
             cursor: pointer;
             z-index: 9998;
-            box-shadow: 0 0 12px rgba(0, 240, 255, 0.25);
+            box-shadow: 0 0 14px rgba(0, 240, 255, 0.28);
             backdrop-filter: blur(4px);
             transition: transform 0.15s ease, background 0.15s ease, opacity 0.2s ease;
-            opacity: 0.82;
+            opacity: 0.85;
         }
         #fs-toggle-btn:hover {
             opacity: 1;
             transform: scale(1.08);
-            background: rgba(24, 14, 62, 0.92);
+            background: rgba(24, 14, 62, 0.95);
+        }
+        @media (max-width: 900px) {
+            #fs-toggle-btn {
+                top: 56px;
+                left: 10px;
+                width: 34px;
+                height: 34px;
+                font-size: 16px;
+            }
         }
         #rotate-overlay {
             position: fixed;
@@ -154,6 +164,17 @@
             }
         }
 
+        function requestSocialIframeFit() {
+            var curW = window.innerWidth || 1000;
+            // Вычисляем идеальную высоту 16:9 под текущую ширину iframe ВКонтакте / Одноклассников
+            var idealH = Math.max(540, Math.min(Math.round(curW * 0.5625), 820));
+            if (window.GamePlatform && window.GamePlatform.current === "vk" && typeof vkBridge !== "undefined") {
+                vkBridge.send("VKWebAppResizeWindow", { width: curW, height: idealH }).catch(function(){});
+            } else if (window.GamePlatform && window.GamePlatform.current === "ok" && typeof FAPI !== "undefined" && FAPI.UI && FAPI.UI.setWindowSize) {
+                FAPI.UI.setWindowSize(curW, idealH);
+            }
+        }
+
         function toggleWebFullscreen() {
             var doc = window.document;
             var docEl = doc.documentElement;
@@ -163,11 +184,7 @@
                 var req = docEl.requestFullscreen || docEl.webkitRequestFullscreen || docEl.mozRequestFullScreen || docEl.msRequestFullscreen;
                 if (req) {
                     req.call(docEl).catch(function() {
-                        if (window.GamePlatform && window.GamePlatform.current === "vk" && typeof vkBridge !== "undefined") {
-                            vkBridge.send("VKWebAppResizeWindow", { width: 1280, height: 760 }).catch(function(){});
-                        } else if (window.GamePlatform && window.GamePlatform.current === "ok" && typeof FAPI !== "undefined" && FAPI.UI && FAPI.UI.setWindowSize) {
-                            FAPI.UI.setWindowSize(1280, 760);
-                        }
+                        requestSocialIframeFit();
                     });
                 }
                 try {
@@ -189,6 +206,9 @@
             var isFs = document.fullscreenElement || document.webkitFullscreenElement || document.mozFullScreenElement || document.msFullscreenElement;
             btn.textContent = isFs ? "✕" : "⛶";
             btn.title = isFs ? "Выйти из полноэкранного режима" : "На весь экран";
+            setTimeout(function() {
+                window.dispatchEvent(new Event("resize"));
+            }, 120);
         }
 
         document.addEventListener("fullscreenchange", updateFullscreenButtonIcon);
@@ -199,7 +219,10 @@
         window.addEventListener("orientationchange", function() {
             _tgOrientationLocked = false;
             clearTimeout(_resizeTimer);
-            _resizeTimer = setTimeout(function() { applyTelegramViewport(false); }, 250);
+            _resizeTimer = setTimeout(function() {
+                applyTelegramViewport(false);
+                requestSocialIframeFit();
+            }, 250);
         });
 
         window.addEventListener("resize", function() {
@@ -238,9 +261,8 @@
                     s.onload = function() {
                         if (typeof vkBridge !== "undefined") {
                             vkBridge.send("VKWebAppInit").catch(function(){});
-                            var targetW = Math.max(window.innerWidth || 1000, 1000);
-                            var targetH = Math.min(Math.round(targetW * 0.5625), 860);
-                            vkBridge.send("VKWebAppResizeWindow", { width: targetW, height: targetH }).catch(function(){});
+                            requestSocialIframeFit();
+                            setTimeout(requestSocialIframeFit, 600);
                         }
                     };
                     document.head.appendChild(s);
@@ -252,11 +274,7 @@
                         if (typeof FAPI !== "undefined") {
                             var rParams = FAPI.Util.getRequestParameters();
                             FAPI.init(rParams["api_server"], rParams["apiconnection"], function() {
-                                if (FAPI.UI && FAPI.UI.setWindowSize) {
-                                    var targetW = Math.max(window.innerWidth || 1000, 1000);
-                                    var targetH = Math.min(Math.round(targetW * 0.5625), 860);
-                                    FAPI.UI.setWindowSize(targetW, targetH);
-                                }
+                                requestSocialIframeFit();
                                 if (FAPI.UI && FAPI.UI.loadAd) FAPI.UI.loadAd();
                             }, function(){});
                         }
@@ -383,7 +401,7 @@
         }, { passive: false });
 
         try {
-            var config = {"args":[],"canvasResizePolicy":2,"emscriptenPoolSize":8,"ensureCrossOriginIsolationHeaders":false,"executable":"index","experimentalVK":false,"fileSizes":{"index.pck":34232784,"index.wasm":39514754},"focusCanvas":true,"gdextensionLibs":[],"godotPoolSize":4};
+            var config = {"args":[],"canvasResizePolicy":2,"emscriptenPoolSize":8,"ensureCrossOriginIsolationHeaders":false,"executable":"index","experimentalVK":false,"fileSizes":{"index.pck":34233024,"index.wasm":39514754},"focusCanvas":true,"gdextensionLibs":[],"godotPoolSize":4};
             config.ensureCrossOriginIsolationHeaders = false;
             config.emscriptenPoolSize = 0;
             config.godotPoolSize = 0;
@@ -391,6 +409,7 @@
             const engine = new Engine(config);
             engine.startGame().then(function() {
                 applyTelegramViewport(false);
+                requestSocialIframeFit();
                 var loader = document.getElementById('boot-loader');
                 if (loader) {
                     loader.style.opacity = '0';
