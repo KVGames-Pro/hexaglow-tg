@@ -3,7 +3,7 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, user-scalable=no, initial-scale=1.0, maximum-scale=1.0, viewport-fit=cover">
-    <title>Hexa Glow: Merge & Sort</title>
+    <title>Hexa_Glow_Merge_Sort</title>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <style>
         html, body {
@@ -44,6 +44,33 @@
             letter-spacing: 2px;
             z-index: 9999;
             transition: opacity 0.35s ease;
+        }
+        #fs-toggle-btn {
+            position: fixed;
+            top: 10px;
+            right: 10px;
+            width: 38px;
+            height: 38px;
+            border-radius: 10px;
+            border: 1.5px solid rgba(0, 240, 255, 0.65);
+            background: rgba(12, 6, 32, 0.72);
+            color: #00f0ff;
+            font-size: 18px;
+            line-height: 1;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            z-index: 9998;
+            box-shadow: 0 0 12px rgba(0, 240, 255, 0.25);
+            backdrop-filter: blur(4px);
+            transition: transform 0.15s ease, background 0.15s ease, opacity 0.2s ease;
+            opacity: 0.82;
+        }
+        #fs-toggle-btn:hover {
+            opacity: 1;
+            transform: scale(1.08);
+            background: rgba(24, 14, 62, 0.92);
         }
         #rotate-overlay {
             position: fixed;
@@ -127,6 +154,46 @@
             }
         }
 
+        function toggleWebFullscreen() {
+            var doc = window.document;
+            var docEl = doc.documentElement;
+            var isFs = doc.fullscreenElement || doc.webkitFullscreenElement || doc.mozFullScreenElement || doc.msFullscreenElement;
+
+            if (!isFs) {
+                var req = docEl.requestFullscreen || docEl.webkitRequestFullscreen || docEl.mozRequestFullScreen || docEl.msRequestFullscreen;
+                if (req) {
+                    req.call(docEl).catch(function() {
+                        if (window.GamePlatform && window.GamePlatform.current === "vk" && typeof vkBridge !== "undefined") {
+                            vkBridge.send("VKWebAppResizeWindow", { width: 1280, height: 760 }).catch(function(){});
+                        } else if (window.GamePlatform && window.GamePlatform.current === "ok" && typeof FAPI !== "undefined" && FAPI.UI && FAPI.UI.setWindowSize) {
+                            FAPI.UI.setWindowSize(1280, 760);
+                        }
+                    });
+                }
+                try {
+                    if (screen.orientation && typeof screen.orientation.lock === "function") {
+                        screen.orientation.lock("landscape").catch(function(){});
+                    }
+                } catch(e) {}
+            } else {
+                var exit = doc.exitFullscreen || doc.webkitExitFullscreen || doc.mozCancelFullScreen || doc.msExitFullscreen;
+                if (exit) {
+                    exit.call(doc).catch(function(){});
+                }
+            }
+        }
+
+        function updateFullscreenButtonIcon() {
+            var btn = document.getElementById("fs-toggle-btn");
+            if (!btn) return;
+            var isFs = document.fullscreenElement || document.webkitFullscreenElement || document.mozFullScreenElement || document.msFullscreenElement;
+            btn.textContent = isFs ? "✕" : "⛶";
+            btn.title = isFs ? "Выйти из полноэкранного режима" : "На весь экран";
+        }
+
+        document.addEventListener("fullscreenchange", updateFullscreenButtonIcon);
+        document.addEventListener("webkitfullscreenchange", updateFullscreenButtonIcon);
+
         applyTelegramViewport(false);
 
         window.addEventListener("orientationchange", function() {
@@ -151,8 +218,9 @@
                 var hash = window.location.hash || "";
                 var fullUrl = search + "&" + hash;
                 var referrer = document.referrer || "";
+                var host = window.location.hostname || "";
 
-                var isVKPlay = fullUrl.indexOf("mr_app_id") !== -1 || referrer.indexOf("vkplay.ru") !== -1;
+                var isVKPlay = fullUrl.indexOf("mr_app_id") !== -1 || referrer.indexOf("vkplay.ru") !== -1 || host.indexOf("vkplay.ru") !== -1;
                 var isVK = (fullUrl.indexOf("vk_app_id=") !== -1 || fullUrl.indexOf("viewer_id=") !== -1 || fullUrl.indexOf("api_id=") !== -1) && !isVKPlay;
                 var isOK = fullUrl.indexOf("application_key=") !== -1 || fullUrl.indexOf("logged_in=") !== -1 || referrer.indexOf("ok.ru") !== -1;
                 var isYandex = referrer.indexOf("yandex.ru") !== -1 || referrer.indexOf("yandex.com") !== -1 || fullUrl.indexOf("ysdk") !== -1;
@@ -163,13 +231,17 @@
                     var s = document.createElement('script');
                     s.src = "https://vkplay.ru/iframe/api.js";
                     document.head.appendChild(s);
-                    this.loadYandexContext();
                 } else if (isVK) {
                     this.current = "vk";
                     var s = document.createElement('script');
                     s.src = "https://unpkg.com/@vkontakte/vk-bridge/dist/browser.min.js";
                     s.onload = function() {
-                        if (typeof vkBridge !== "undefined") vkBridge.send("VKWebAppInit").catch(function(){});
+                        if (typeof vkBridge !== "undefined") {
+                            vkBridge.send("VKWebAppInit").catch(function(){});
+                            var targetW = Math.max(window.innerWidth || 1000, 1000);
+                            var targetH = Math.min(Math.round(targetW * 0.5625), 860);
+                            vkBridge.send("VKWebAppResizeWindow", { width: targetW, height: targetH }).catch(function(){});
+                        }
                     };
                     document.head.appendChild(s);
                 } else if (isOK) {
@@ -180,6 +252,11 @@
                         if (typeof FAPI !== "undefined") {
                             var rParams = FAPI.Util.getRequestParameters();
                             FAPI.init(rParams["api_server"], rParams["apiconnection"], function() {
+                                if (FAPI.UI && FAPI.UI.setWindowSize) {
+                                    var targetW = Math.max(window.innerWidth || 1000, 1000);
+                                    var targetH = Math.min(Math.round(targetW * 0.5625), 860);
+                                    FAPI.UI.setWindowSize(targetW, targetH);
+                                }
                                 if (FAPI.UI && FAPI.UI.loadAd) FAPI.UI.loadAd();
                             }, function(){});
                         }
@@ -244,13 +321,20 @@
         }
 
         function showRsyaWebAd(isRewarded, onSuccess, onError) {
+            if (window.GamePlatform && window.GamePlatform.current === "vk_play") {
+                if (onError) onError();
+                return;
+            }
             var blockId = isRewarded ? AD_CONFIG.RSYA_WEB_REWARD_ID : AD_CONFIG.RSYA_WEB_INT_ID;
-            if (window.Ya && window.Ya.Context && window.Ya.Context.AdvManager && blockId.indexOf("XXXXXX") === -1) {
+            var isMobileBrowser = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+            var rsyaPlatform = isMobileBrowser ? "touch" : "desktop";
+
+            if (window.Ya && window.Ya.Context && window.Ya.Context.AdvManager && blockId && blockId.indexOf("XXXXXX") === -1) {
                 window.yaContextCb.push(function() {
                     Ya.Context.AdvManager.render({
                         blockId: blockId,
                         type: isRewarded ? "rewarded" : "fullscreen",
-                        platform: "touch",
+                        platform: rsyaPlatform,
                         onRewarded: function(isRewardedDone) {
                             if (isRewardedDone && onSuccess) onSuccess();
                             else if (onError) onError();
@@ -276,10 +360,18 @@
         <div style="font-size: 16px; color: #a8f9ff; margin-top: 8px; font-weight: normal;">Для полноэкранной игры в альбомном режиме</div>
         <button id="rotate-btn" onclick="applyTelegramViewport(true)">ПОВЕРНУТЬ ЭКРАН</button>
     </div>
+    <button id="fs-toggle-btn" title="На весь экран" onclick="toggleWebFullscreen()">⛶</button>
     <div id="boot-loader">HEXA GLOW: ЗАГРУЗКА...</div>
     <canvas id="canvas"></canvas>
     <script src="index.js"></script>
     <script>
+        (function() {
+            var fsBtn = document.getElementById("fs-toggle-btn");
+            if (fsBtn && window.GamePlatform && window.GamePlatform.current !== "telegram") {
+                fsBtn.style.display = "flex";
+            }
+        })();
+
         document.addEventListener('touchend', function() {
             if (!_tgOrientationLocked || !(window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.isFullscreen)) {
                 applyTelegramViewport(true);
@@ -291,7 +383,7 @@
         }, { passive: false });
 
         try {
-            var config = {"args":[],"canvasResizePolicy":2,"emscriptenPoolSize":8,"ensureCrossOriginIsolationHeaders":false,"executable":"index","experimentalVK":false,"fileSizes":{"index.pck":34231040,"index.wasm":39514754},"focusCanvas":true,"gdextensionLibs":[],"godotPoolSize":4};
+            var config = {"args":[],"canvasResizePolicy":2,"emscriptenPoolSize":8,"ensureCrossOriginIsolationHeaders":false,"executable":"index","experimentalVK":false,"fileSizes":{"index.pck":34232784,"index.wasm":39514754},"focusCanvas":true,"gdextensionLibs":[],"godotPoolSize":4};
             config.ensureCrossOriginIsolationHeaders = false;
             config.emscriptenPoolSize = 0;
             config.godotPoolSize = 0;
